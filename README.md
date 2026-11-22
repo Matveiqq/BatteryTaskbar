@@ -30,15 +30,26 @@
 
     dotnet run
 
+## Устройство проекта
+- `BatteryService.cs`: `IBatteryProvider` (источник заряда) и `DeviceMonitor` (опрашивает все источники параллельно)
+- `Providers.cs`: Bluetooth LE, заряд из Windows (PnP), Windows Battery API
+- `LogitechHidpp.cs`: Logitech на приёмниках (HID++)
+- `Themes.cs`: темы оформления (`IBatteryTheme`)
+- `OverlayWindow.cs`: виджет на панели задач, `TrayController.cs`: иконка в трее и меню
+- `HidScanner.cs`: диагностика служебных каналов донглов
+
+## Как добавить поддержку нового бренда
+Напишите класс, реализующий `IBatteryProvider`, и добавьте его в `Program.cs` в список провайдеров.
+Если ваш донгл не определяется, запустите в меню трея «Сканер служебных каналов», откройте журнал
+и приложите его к Issue на GitHub.
+
 ## Как добавить новую тему
-1. Добавьте пару `(номер, название)` в `Themes.All` (файл `Settings.cs`).
-2. Добавьте `case` с отрисовкой в `OverlayWindow.BuildItem`.
-Пункт меню появится сам.
+Реализуйте `IBatteryTheme` и добавьте тему в `Themes.All` (файл `Themes.cs`). Пункт меню появится сам.
 
 ## Планы
 - [ ] Новые темы
 - [ ] Уведомление о низком заряде
-- [ ] Донглы Razer, SteelSeries, Corsair
+- [ ] Донглы с фирменными протоколами (Razer, SteelSeries, Corsair, Ajazz и др.)
 - [ ] Подпись exe сертификатом
 
 ## Лицензия

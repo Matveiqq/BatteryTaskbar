@@ -6,16 +6,6 @@ using Microsoft.Win32;
 
 namespace BatteryTaskbar;
 
-public static class Themes
-{
-    // Сюда позже добавляются новые темы: (номер, название).
-    // Отрисовка каждой темы находится в OverlayWindow.BuildItem.
-    public static readonly (int Id, string Name)[] All =
-    {
-        (1, "Компактный"),
-    };
-}
-
 public class AppSettings
 {
     public int Theme { get; set; } = 1;
@@ -76,5 +66,18 @@ public static class Autostart
                 k.DeleteValue(ValueName, false);
         }
         catch { }
+    }
+}
+
+public static class SystemInfo
+{
+    public static bool IsLightTheme()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return (k?.GetValue("SystemUsesLightTheme") as int?) == 1;
+        }
+        catch { return false; }
     }
 }

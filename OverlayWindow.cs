@@ -1,26 +1,26 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Microsoft.Win32;
 
 namespace BatteryTaskbar;
 
+// Безрамочное прозрачное окно, лежащее поверх левой части панели задач.
 public class OverlayWindow : Window
 {
-    static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     readonly StackPanel panel = new() { Orientation = Orientation.Horizontal };
     readonly AppSettings settings;
-    List<DeviceBattery> last = new();
+    readonly DeviceMonitor monitor;
 
     public Action? OpenMenu { get; set; }
 
-    public OverlayWindow(AppSettings s)
+    public OverlayWindow(AppSettings s, DeviceMonitor m)
     {
         settings = s;
+        monitor = m;
+
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)); // почти прозрачный, но ловит клики
@@ -32,77 +32,33 @@ public class OverlayWindow : Window
         Content = panel;
         MouseDown += (_, _) => OpenMenu?.Invoke();
 
-        // Панель задач тоже "поверх всех" — периодически возвращаем себя наверх
+        monitor.Updated += Render;
+
+        // Панель задач тоже "поверх всех": периодически возвращаем себя наверх
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         timer.Tick += (_, _) => { Topmost = false; Topmost = true; Reposition(); };
         timer.Start();
     }
 
-    public void Update(List<DeviceBattery> all)
-    {
-        last = all.ToList();
-        Dispatcher.BeginInvoke(new Action(Render));
-    }
-
-    public void Refresh() => Dispatcher.BeginInvoke(new Action(Render));
+    public void Refresh() => Render();
 
     void Render()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(Render));
+            return;
+        }
+
         panel.Children.Clear();
-        Brush fg = IsLightTheme() ? Brushes.Black : Brushes.White;
+        Brush fg = SystemInfo.IsLightTheme() ? Brushes.Black : Brushes.White;
         Brush low = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
+        var theme = Themes.Get(settings.Theme);
 
-        foreach (var d in last.Where(d => !settings.HiddenDevices.Contains(d.Name)))
-        {
-            Brush b = d.Level <= settings.LowThreshold ? low : fg;
-            panel.Children.Add(BuildItem(d, b));
-        }
+        foreach (var d in monitor.Devices.Where(d => !settings.HiddenDevices.Contains(d.Name)))
+            panel.Children.Add(theme.Build(d, d.Level <= settings.LowThreshold ? low : fg));
+
         Reposition();
-    }
-
-    // Выбор отрисовки по теме. Новые темы добавлять сюда (и в Themes.All).
-    UIElement BuildItem(DeviceBattery d, Brush b)
-    {
-        switch (settings.Theme)
-        {
-            case 1:
-            default:
-                return Compact(d, b);
-        }
-    }
-
-    UIElement Compact(DeviceBattery d, Brush b)
-    {
-        var sp = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 14, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = d.Name
-        };
-        sp.Children.Add(new TextBlock { Text = Glyph(d.Name), FontFamily = IconFont, FontSize = 16, Foreground = b, VerticalAlignment = VerticalAlignment.Center });
-        sp.Children.Add(new TextBlock { Text = d.Level + "%", FontSize = 13, Foreground = b, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-        return sp;
-    }
-
-    static string Glyph(string name)
-    {
-        var n = name.ToLowerInvariant();
-        if (n.Contains("mouse") || n.Contains("мыш") || n.Contains("mx ") || n.Contains("g502") || n.Contains("g305") || n.Contains("superlight")) return "\uE962";
-        if (n.Contains("key") || n.Contains("клав") || n.Contains("k380") || n.Contains("k70") || n.Contains("mx keys")) return "\uE765";
-        if (n.Contains("head") || n.Contains("buds") || n.Contains("pods") || n.Contains("науш") || n.Contains("wh-") || n.Contains("wf-") || n.Contains("g pro x")) return "\uE7F6";
-        if (n.Contains("controller") || n.Contains("gamepad") || n.Contains("геймпад")) return "\uE7FC";
-        return "\uE702";
-    }
-
-    public static bool IsLightTheme()
-    {
-        try
-        {
-            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            return (k?.GetValue("SystemUsesLightTheme") as int?) == 1;
-        }
-        catch { return false; }
     }
 
     void Reposition()

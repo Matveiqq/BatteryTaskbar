@@ -1,19 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 using HidSharp;
 
 namespace BatteryTaskbar;
 
 // Устройства Logitech на USB-приёмниках (Unifying, Bolt, Lightspeed) отдают заряд по протоколу HID++ 2.0.
-public static class LogitechHidpp
+public sealed class LogitechProvider : IBatteryProvider
 {
     const int VendorId = 0x046D;
     const byte SwId = 0x05;
 
-    public static List<DeviceBattery> ReadAll()
+    public string Name => "Logitech HID++";
+
+    public Task<List<BatteryDevice>> ReadAsync() => Task.Run(ReadAll);
+
+    static List<BatteryDevice> ReadAll()
     {
-        var list = new List<DeviceBattery>();
+        var list = new List<BatteryDevice>();
         int total = 0, longIf = 0;
         foreach (var dev in DeviceList.Local.GetHidDevices(VendorId))
         {
@@ -22,9 +27,9 @@ public static class LogitechHidpp
             {
                 // интерфейс с длинными HID++ отчётами (20 байт)
                 if (dev.GetMaxOutputReportLength() != 20) continue;
-                longIf++;
                 int inLen = dev.GetMaxInputReportLength();
                 if (inLen < 20) continue;
+                longIf++;
                 if (!dev.TryOpen(out HidStream stream)) continue;
                 using (stream)
                 {
@@ -35,7 +40,11 @@ public static class LogitechHidpp
                         try
                         {
                             var r = ReadDevice(stream, inLen, idx);
-                            if (r != null) list.Add(r);
+                            if (r != null)
+                            {
+                                Log.Write("  Logitech: " + r.Name + " = " + r.Level + "%");
+                                list.Add(r);
+                            }
                         }
                         catch { }
                     }
@@ -47,25 +56,7 @@ public static class LogitechHidpp
         return list;
     }
 
-    // Для диагностики: список всех HID-устройств (нужен, чтобы добавлять поддержку других брендов)
-    public static void DumpAllHid()
-    {
-        foreach (var dev in DeviceList.Local.GetHidDevices())
-        {
-            try
-            {
-                string name = "", man = "";
-                try { name = dev.GetProductName(); } catch { }
-                try { man = dev.GetManufacturer(); } catch { }
-                Log.Write("  HID " + dev.VendorID.ToString("X4") + ":" + dev.ProductID.ToString("X4") + " " + man + " " + name +
-                          " in=" + dev.GetMaxInputReportLength() + " out=" + dev.GetMaxOutputReportLength() +
-                          " feat=" + dev.GetMaxFeatureReportLength());
-            }
-            catch { }
-        }
-    }
-
-    static DeviceBattery? ReadDevice(HidStream s, int inLen, byte idx)
+    static BatteryDevice? ReadDevice(HidStream s, int inLen, byte idx)
     {
         int level = -1;
 
@@ -90,7 +81,7 @@ public static class LogitechHidpp
 
         if (level < 0 || level > 100) return null;
         string name = ReadName(s, inLen, idx) ?? ("Logitech " + idx);
-        return new DeviceBattery(name, level);
+        return new BatteryDevice(name, level, "Logitech HID++");
     }
 
     static string? ReadName(HidStream s, int inLen, byte idx)
