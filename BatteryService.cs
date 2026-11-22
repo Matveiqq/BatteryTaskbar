@@ -23,7 +23,25 @@ public sealed class DeviceMonitor
     public IReadOnlyList<BatteryDevice> Devices { get; private set; } = new List<BatteryDevice>();
     public bool IsPolling { get; private set; }
     public bool HasPolled { get; private set; }
+    public bool DemoMode { get; private set; }
     public event Action? Updated;
+
+    static readonly BatteryDevice[] DemoDevices =
+    {
+        new BatteryDevice("Клавиатура", 85, "Демо"),
+        new BatteryDevice("Мышь", 42, "Демо"),
+        new BatteryDevice("Наушники", 18, "Демо"),
+    };
+
+    // Демо-режим: показывает примерные устройства, чтобы оценить вид и положение виджета без железа
+    public void SetDemo(bool on)
+    {
+        DemoMode = on;
+        if (on) Devices = DemoDevices;
+        else Devices = new List<BatteryDevice>();
+        Updated?.Invoke();
+        if (!on) _ = PollAsync();
+    }
 
     public DeviceMonitor(params IBatteryProvider[] providers)
     {
@@ -32,6 +50,7 @@ public sealed class DeviceMonitor
 
     public async Task PollAsync()
     {
+        if (DemoMode) return;
         if (IsPolling)
         {
             while (IsPolling) await Task.Delay(200);
@@ -55,8 +74,8 @@ public sealed class DeviceMonitor
                 foreach (var d in list)
                     merged.TryAdd(d.Name, d);
 
-            Devices = merged.Values.OrderBy(d => d.Name).ToList();
-            Log.Write("Итого найдено: " + Devices.Count);
+            if (!DemoMode) Devices = merged.Values.OrderBy(d => d.Name).ToList();
+            Log.Write("Итого найдено: " + merged.Count);
         }
         catch (Exception ex)
         {

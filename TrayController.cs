@@ -105,6 +105,10 @@ public sealed class TrayController : IDisposable
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 
+        var demo = new Forms.ToolStripMenuItem("Демо: показать пример устройств") { Checked = monitor.DemoMode };
+        demo.Click += (_, _) => monitor.SetDemo(!monitor.DemoMode);
+        menu.Items.Add(demo);
+
         // Обновить: опрашиваем устройства заново и снова показываем меню уже с новым списком
         var refresh = new Forms.ToolStripMenuItem("Обновить список устройств");
         refresh.Click += async (_, _) =>
