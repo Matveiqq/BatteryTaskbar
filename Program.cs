@@ -16,7 +16,7 @@ public static class Program
     [STAThread]
     public static void Main()
     {
-        Log.Write("=== запуск Battery Taskbar 0.3.0, " + Environment.OSVersion.VersionString + " ===");
+        Log.Write("=== запуск Battery Taskbar 0.3.1, " + Environment.OSVersion.VersionString + " ===");
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var settings = AppSettings.Load();
         var overlay = new OverlayWindow(settings);

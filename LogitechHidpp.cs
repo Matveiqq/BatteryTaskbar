@@ -47,6 +47,24 @@ public static class LogitechHidpp
         return list;
     }
 
+    // Для диагностики: список всех HID-устройств (нужен, чтобы добавлять поддержку других брендов)
+    public static void DumpAllHid()
+    {
+        foreach (var dev in DeviceList.Local.GetHidDevices())
+        {
+            try
+            {
+                string name = "", man = "";
+                try { name = dev.GetProductName(); } catch { }
+                try { man = dev.GetManufacturer(); } catch { }
+                Log.Write("  HID " + dev.VendorID.ToString("X4") + ":" + dev.ProductID.ToString("X4") + " " + man + " " + name +
+                          " in=" + dev.GetMaxInputReportLength() + " out=" + dev.GetMaxOutputReportLength() +
+                          " feat=" + dev.GetMaxFeatureReportLength());
+            }
+            catch { }
+        }
+    }
+
     static DeviceBattery? ReadDevice(HidStream s, int inLen, byte idx)
     {
         int level = -1;

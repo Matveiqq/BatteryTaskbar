@@ -18,6 +18,7 @@ public static class BatteryService
     const string BatteryKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
     const string ContainerKey = "System.Devices.ContainerId";
     const string NameKey = "System.ItemNameDisplay";
+    static bool dumped;
 
     public static async Task<List<DeviceBattery>> ReadAllAsync()
     {
@@ -26,6 +27,11 @@ public static class BatteryService
 
         await Safe("Заряд из Windows (PnP)", () => ReadPnpAsync(result));
         await Safe("Windows Battery API", () => ReadWindowsBatteryApiAsync(result));
+        if (!dumped)
+        {
+            dumped = true;
+            await Safe("Список HID-устройств", () => Task.Run(() => LogitechHidpp.DumpAllHid()));
+        }
         await Safe("Logitech HID++", async () =>
         {
             var logi = await Task.Run(() => LogitechHidpp.ReadAll());
