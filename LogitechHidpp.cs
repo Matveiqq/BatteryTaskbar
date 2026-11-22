@@ -14,12 +14,15 @@ public static class LogitechHidpp
     public static List<DeviceBattery> ReadAll()
     {
         var list = new List<DeviceBattery>();
+        int total = 0, longIf = 0;
         foreach (var dev in DeviceList.Local.GetHidDevices(VendorId))
         {
+            total++;
             try
             {
                 // интерфейс с длинными HID++ отчётами (20 байт)
                 if (dev.GetMaxOutputReportLength() != 20) continue;
+                longIf++;
                 int inLen = dev.GetMaxInputReportLength();
                 if (inLen < 20) continue;
                 if (!dev.TryOpen(out HidStream stream)) continue;
@@ -40,6 +43,7 @@ public static class LogitechHidpp
             }
             catch { }
         }
+        Log.Write("  Logitech HID интерфейсов: " + total + ", с длинными отчётами HID++: " + longIf);
         return list;
     }
 

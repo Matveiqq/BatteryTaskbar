@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
@@ -15,10 +16,13 @@ public static class Program
     [STAThread]
     public static void Main()
     {
+        Log.Write("=== запуск Battery Taskbar 0.3.0, " + Environment.OSVersion.VersionString + " ===");
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var settings = AppSettings.Load();
         var overlay = new OverlayWindow(settings);
         var devices = new List<DeviceBattery>();
+        bool polling = false;
+        bool firstDone = false;
 
         var tray = new Forms.NotifyIcon { Icon = MakeIcon(), Visible = true, Text = "Battery Taskbar" };
         var menu = new Forms.ContextMenuStrip();
@@ -26,10 +30,24 @@ public static class Program
 
         async void Poll()
         {
-            var fresh = await BatteryService.ReadAllAsync();
-            devices.Clear();
-            devices.AddRange(fresh);
-            overlay.Update(fresh);
+            if (polling) return;
+            polling = true;
+            try
+            {
+                var fresh = await BatteryService.ReadAllAsync();
+                devices.Clear();
+                devices.AddRange(fresh);
+                overlay.Update(fresh);
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Poll ошибка: " + ex.Message);
+            }
+            finally
+            {
+                polling = false;
+                firstDone = true;
+            }
         }
 
         void Rebuild()
@@ -38,14 +56,12 @@ public static class Program
             menu.Items.Add(new Forms.ToolStripMenuItem("Battery Taskbar") { Enabled = false });
             menu.Items.Add(new Forms.ToolStripSeparator());
 
-            // Текущий заряд всех найденных устройств
             if (devices.Count == 0)
-                menu.Items.Add(new Forms.ToolStripMenuItem("Устройства не найдены") { Enabled = false });
+                menu.Items.Add(new Forms.ToolStripMenuItem(firstDone ? "Устройства не найдены" : "Идёт поиск устройств…") { Enabled = false });
             foreach (var d in devices)
                 menu.Items.Add(new Forms.ToolStripMenuItem(d.Name + " — " + d.Level + "%"));
             menu.Items.Add(new Forms.ToolStripSeparator());
 
-            // Что показывать на панели задач
             var show = new Forms.ToolStripMenuItem("Показывать на панели");
             var names = devices.Select(d => d.Name).Union(settings.HiddenDevices).OrderBy(n => n).ToList();
             if (names.Count == 0) show.DropDownItems.Add(new Forms.ToolStripMenuItem("Нет устройств") { Enabled = false });
@@ -63,7 +79,6 @@ public static class Program
             }
             menu.Items.Add(show);
 
-            // Тема
             var themeMenu = new Forms.ToolStripMenuItem("Тема");
             foreach (var t in Themes.All)
             {
@@ -74,7 +89,6 @@ public static class Program
             }
             menu.Items.Add(themeMenu);
 
-            // Порог низкого заряда
             var low = new Forms.ToolStripMenuItem("Красный цвет при заряде ниже");
             foreach (var p in new[] { 10, 15, 20, 30, 50 })
             {
@@ -93,6 +107,18 @@ public static class Program
             var auto = new Forms.ToolStripMenuItem("Запускать вместе с Windows") { Checked = Autostart.IsEnabled() };
             auto.Click += (_, _) => Autostart.Set(!Autostart.IsEnabled());
             menu.Items.Add(auto);
+
+            var diag = new Forms.ToolStripMenuItem("Диагностика (открыть журнал)");
+            diag.Click += (_, _) =>
+            {
+                try
+                {
+                    Log.Write("(журнал открыт пользователем)");
+                    Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Log.FilePath + "\"") { UseShellExecute = true });
+                }
+                catch { }
+            };
+            menu.Items.Add(diag);
 
             var exit = new Forms.ToolStripMenuItem("Выход");
             exit.Click += (_, _) => { tray.Visible = false; app.Shutdown(); };
