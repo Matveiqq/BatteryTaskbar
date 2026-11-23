@@ -9,7 +9,7 @@ public static class Program
     [STAThread]
     public static void Main()
     {
-        Log.Write("=== запуск Battery Taskbar 1.3.0, " + Environment.OSVersion.VersionString + " ===");
+        Log.Write("=== запуск Battery Taskbar 1.4.1, " + Environment.OSVersion.VersionString + " ===");
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var settings = AppSettings.Load();
@@ -21,7 +21,8 @@ public static class Program
             new PnpBatteryProvider(),
             new WindowsBatteryApiProvider(),
             new LogitechProvider(),
-            new FeatureReportProvider());
+            new FeatureReportProvider(),
+            new HaloBatteryBridgeProvider(settings));
 
         var overlay = new OverlayWindow(settings, monitor);
         var tray = new TrayController(settings, monitor);

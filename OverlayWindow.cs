@@ -1,4 +1,3 @@
-
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -10,25 +9,30 @@ using System.Windows.Threading;
 
 namespace BatteryTaskbar;
 
+static class Native
+{
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOACTIVATE = 0x0010;
+    public const uint GW_HWNDPREV = 3;
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_TOOLWINDOW = 0x00000080;
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
+    [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+    [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
+}
+
+// Безрамочное прозрачное окно, лежащее поверх левой части панели задач.
 public class OverlayWindow : Window
 {
     readonly StackPanel panel = new() { Orientation = Orientation.Horizontal };
     readonly AppSettings settings;
     readonly DeviceMonitor monitor;
-
-    WinEventDelegate? winEventCallback;
-    IntPtr foregroundHook;
-    IntPtr shellHook;
-
-    const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
-    const uint EVENT_OBJECT_SHOW = 0x8002;
-    const uint EVENT_OBJECT_HIDE = 0x8003;
-    const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
-    const uint SWP_NOSIZE = 0x0001;
-    const uint SWP_NOMOVE = 0x0002;
-    const uint SWP_NOACTIVATE = 0x0010;
-
-    static readonly IntPtr HWND_TOPMOST = new(-1);
 
     public Action? OpenMenu { get; set; }
 
@@ -39,88 +43,72 @@ public class OverlayWindow : Window
 
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
-        Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+        Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)); // почти прозрачный, но ловит клики
         ShowInTaskbar = false;
         ShowActivated = false;
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
         Content = panel;
-
         MouseDown += (_, _) => OpenMenu?.Invoke();
+
         monitor.Updated += Render;
 
-        Loaded += (_, _) =>
-        {
-            InstallWindowHooks();
-            UpdateVisibility();
-        };
+        // Быстро возвращаем виджет наверх, если панель задач, меню «Пуск» или Alt+Tab его перекрыли
+        var keepTop = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        keepTop.Tick += (_, _) => KeepOnTop();
+        keepTop.Start();
 
-        Closed += (_, _) => RemoveWindowHooks();
+        // Положение пересчитываем реже
+        var place = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        place.Tick += (_, _) => Reposition();
+        place.Start();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Не забирает фокус при клике и не показывается в Alt+Tab
+        var hwnd = new WindowInteropHelper(this).Handle;
+        int ex = Native.GetWindowLong(hwnd, Native.GWL_EXSTYLE);
+        Native.SetWindowLong(hwnd, Native.GWL_EXSTYLE, ex | Native.WS_EX_TOOLWINDOW | Native.WS_EX_NOACTIVATE);
     }
 
     public void Refresh() => Render();
 
-    void InstallWindowHooks()
+    void KeepOnTop()
     {
-        if (winEventCallback != null) return;
-
-        winEventCallback = OnWinEvent;
-
-        foregroundHook = SetWinEventHook(
-            EVENT_SYSTEM_FOREGROUND,
-            EVENT_SYSTEM_FOREGROUND,
-            IntPtr.Zero,
-            winEventCallback,
-            0, 0,
-            WINEVENT_SKIPOWNPROCESS);
-
-        shellHook = SetWinEventHook(
-            EVENT_OBJECT_SHOW,
-            EVENT_OBJECT_HIDE,
-            IntPtr.Zero,
-            winEventCallback,
-            0, 0,
-            WINEVENT_SKIPOWNPROCESS);
-    }
-
-    void RemoveWindowHooks()
-    {
-        if (foregroundHook != IntPtr.Zero)
-            UnhookWinEvent(foregroundHook);
-
-        if (shellHook != IntPtr.Zero)
-            UnhookWinEvent(shellHook);
-
-        foregroundHook = IntPtr.Zero;
-        shellHook = IntPtr.Zero;
-        winEventCallback = null;
-    }
-
-    void OnWinEvent(
-        IntPtr hook,
-        uint eventType,
-        IntPtr hwnd,
-        int idObject,
-        int idChild,
-        uint eventThread,
-        uint eventTime)
-    {
-        if (eventType == EVENT_SYSTEM_FOREGROUND ||
-            (idObject == 0 && IsTaskbarWindow(hwnd)))
+        try
         {
-            Dispatcher.BeginInvoke(
-                new Action(UpdateVisibility),
-                DispatcherPriority.Normal);
+            if (settings.HideInFullscreen && IsFullscreenAppRunning())
+            {
+                if (IsVisible) Hide();
+                return;
+            }
+
+            if (!IsVisible) Show();
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            // Если над нами лежит другое окно, поднимаемся обратно (без активации)
+            if (Native.GetWindow(hwnd, Native.GW_HWNDPREV) != IntPtr.Zero)
+                Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, 0, 0, 0, 0,
+                    Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         }
+        catch { }
     }
 
-    static bool IsTaskbarWindow(IntPtr hwnd)
+    // Полноэкранная игра, видео или презентация
+    static bool IsFullscreenAppRunning()
     {
-        if (hwnd == IntPtr.Zero) return false;
-
-        return hwnd == FindWindow("Shell_TrayWnd", null) ||
-               hwnd == FindWindow("Shell_SecondaryTrayWnd", null);
+        try
+        {
+            if (Native.SHQueryUserNotificationState(out int state) != 0) return false;
+            // 2 = полноэкранное приложение, 3 = полноэкранная игра (Direct3D), 4 = режим презентации
+            return state == 2 || state == 3 || state == 4;
+        }
+        catch { return false; }
     }
 
     void Render()
@@ -132,186 +120,26 @@ public class OverlayWindow : Window
         }
 
         panel.Children.Clear();
-
-        Brush fg = SystemInfo.IsLightTheme()
-            ? Brushes.Black
-            : Brushes.White;
-
-        Brush low = new SolidColorBrush(
-            Color.FromRgb(0xFF, 0x6B, 0x6B));
-
+        Brush fg = SystemInfo.IsLightTheme() ? Brushes.Black : Brushes.White;
+        Brush low = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
         var theme = Themes.Get(settings.Theme);
 
-        foreach (var d in monitor.Devices.Where(
-            d => !settings.HiddenDevices.Contains(d.Name)))
-        {
-            panel.Children.Add(
-                theme.Build(
-                    d,
-                    d.Level <= settings.LowThreshold ? low : fg));
-        }
+        foreach (var d in monitor.Devices.Where(d => !settings.HiddenDevices.Contains(d.Name)))
+            panel.Children.Add(theme.Build(d, d.Level <= settings.LowThreshold ? low : fg));
 
         Reposition();
-        UpdateVisibility();
-    }
-
-    void UpdateVisibility()
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(UpdateVisibility));
-            return;
-        }
-
-        IntPtr taskbar = FindWindow("Shell_TrayWnd", null);
-
-        if (!IsTaskbarActuallyVisible(taskbar) ||
-            IsForegroundFullscreen())
-        {
-            if (IsVisible) Hide();
-            return;
-        }
-
-        Reposition();
-
-        if (!IsVisible)
-            Show();
-
-        IntPtr hwnd = new WindowInteropHelper(this).Handle;
-
-        if (hwnd != IntPtr.Zero)
-        {
-            SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
-    }
-
-    static bool IsTaskbarActuallyVisible(IntPtr taskbar)
-    {
-        if (taskbar == IntPtr.Zero ||
-            !IsWindowVisible(taskbar))
-            return false;
-
-        if (!GetWindowRect(taskbar, out var r))
-            return false;
-
-        double sw = SystemParameters.PrimaryScreenWidth;
-        double sh = SystemParameters.PrimaryScreenHeight;
-
-        double visibleWidth =
-            Math.Max(0, Math.Min(r.Right, sw) - Math.Max(r.Left, 0));
-
-        double visibleHeight =
-            Math.Max(0, Math.Min(r.Bottom, sh) - Math.Max(r.Top, 0));
-
-        return visibleWidth > 3 && visibleHeight > 3;
-    }
-
-    static bool IsForegroundFullscreen()
-    {
-        IntPtr foreground = GetForegroundWindow();
-
-        if (foreground == IntPtr.Zero ||
-            !GetWindowRect(foreground, out var r))
-            return false;
-
-        try
-        {
-            var bounds =
-                System.Windows.Forms.Screen.FromHandle(foreground).Bounds;
-
-            const int tolerance = 2;
-
-            return r.Left <= bounds.Left + tolerance &&
-                   r.Top <= bounds.Top + tolerance &&
-                   r.Right >= bounds.Right - tolerance &&
-                   r.Bottom >= bounds.Bottom - tolerance;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     void Reposition()
     {
-        panel.Measure(
-            new Size(double.PositiveInfinity, double.PositiveInfinity));
-
+        panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double h = panel.DesiredSize.Height;
         var wa = SystemParameters.WorkArea;
-
         double screenH = SystemParameters.PrimaryScreenHeight;
         double taskbarH = screenH - wa.Height;
         double areaTop = wa.Bottom;
-
-        if (taskbarH < 20)
-        {
-            taskbarH = 48;
-            areaTop = screenH - 48;
-        }
-
+        if (taskbarH < 20) { taskbarH = 48; areaTop = screenH - 48; } // автоскрытие или панель не снизу
         Left = settings.LeftMargin;
         Top = areaTop + (taskbarH - h) / 2;
     }
-
-    delegate void WinEventDelegate(
-        IntPtr hook,
-        uint eventType,
-        IntPtr hwnd,
-        int idObject,
-        int idChild,
-        uint eventThread,
-        uint eventTime);
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern IntPtr SetWinEventHook(
-        uint eventMin,
-        uint eventMax,
-        IntPtr hmodWinEventProc,
-        WinEventDelegate lpfnWinEventProc,
-        uint idProcess,
-        uint idThread,
-        uint dwFlags);
-
-    [DllImport("user32.dll")]
-    static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern IntPtr FindWindow(
-        string? lpClassName,
-        string? lpWindowName);
-
-    [DllImport("user32.dll")]
-    static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    static extern bool GetWindowRect(
-        IntPtr hWnd,
-        out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern bool SetWindowPos(
-        IntPtr hWnd,
-        IntPtr hWndInsertAfter,
-        int X,
-        int Y,
-        int cx,
-        int cy,
-        uint uFlags);
 }

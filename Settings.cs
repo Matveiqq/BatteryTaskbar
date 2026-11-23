@@ -11,6 +11,8 @@ public class AppSettings
     public int Theme { get; set; } = 1;
     public int LowThreshold { get; set; } = 20;
     public int LeftMargin { get; set; } = 12;
+    public bool HideInFullscreen { get; set; } = true;
+    public bool UseHaloBattery { get; set; } = true;
     public HashSet<string> HiddenDevices { get; set; } = new();
 
     static string FilePath => System.IO.Path.Combine(

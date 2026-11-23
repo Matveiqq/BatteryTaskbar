@@ -103,6 +103,14 @@ public sealed class TrayController : IDisposable
         }
         menu.Items.Add(low);
 
+        var fs = new Forms.ToolStripMenuItem("Скрывать в полноэкранных приложениях") { Checked = settings.HideInFullscreen };
+        fs.Click += (_, _) => { settings.HideInFullscreen = !settings.HideInFullscreen; settings.Save(); };
+        menu.Items.Add(fs);
+
+        var halo = new Forms.ToolStripMenuItem("Брать данные из HaloBattery (если запущен)") { Checked = settings.UseHaloBattery };
+        halo.Click += (_, _) => { settings.UseHaloBattery = !settings.UseHaloBattery; settings.Save(); };
+        menu.Items.Add(halo);
+
         menu.Items.Add(new Forms.ToolStripSeparator());
 
         var demo = new Forms.ToolStripMenuItem("Демо: показать пример устройств") { Checked = monitor.DemoMode };
