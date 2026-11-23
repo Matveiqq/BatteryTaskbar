@@ -113,6 +113,12 @@ public class OverlayWindow : Window
 
     void Render()
     {
+        try { RenderCore(); }
+        catch (Exception ex) { Log.Write("Отрисовка: ошибка " + ex); }
+    }
+
+    void RenderCore()
+    {
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(new Action(Render));

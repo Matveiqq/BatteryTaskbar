@@ -39,7 +39,7 @@ public sealed class DeviceMonitor
         DemoMode = on;
         if (on) Devices = DemoDevices;
         else Devices = new List<BatteryDevice>();
-        Updated?.Invoke();
+        RaiseUpdated();
         if (!on) _ = PollAsync();
     }
 
@@ -86,7 +86,13 @@ public sealed class DeviceMonitor
             IsPolling = false;
             HasPolled = true;
         }
-        Updated?.Invoke();
+        RaiseUpdated();
+    }
+
+    void RaiseUpdated()
+    {
+        try { Updated?.Invoke(); }
+        catch (Exception ex) { Log.Write("Обновление интерфейса: ошибка " + ex); }
     }
 
     async Task<List<BatteryDevice>> RunProvider(IBatteryProvider p)
