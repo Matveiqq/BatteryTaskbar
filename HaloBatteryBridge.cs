@@ -37,7 +37,7 @@ public sealed class HaloBatteryBridgeProvider : IBatteryProvider
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HaloBattery", "status.json");
         if (!File.Exists(path))
         {
-            Log.Write("  HaloBattery: status.json не найден (включите status_file в настройках HaloBattery)");
+            Log.Debug("  HaloBattery: status.json не найден (включите status_file в настройках HaloBattery)");
             return list;
         }
 
@@ -45,7 +45,7 @@ public sealed class HaloBatteryBridgeProvider : IBatteryProvider
         var age = DateTime.Now - File.GetLastWriteTime(path);
         if (!running && age > TimeSpan.FromMinutes(10))
         {
-            Log.Write("  HaloBattery: файл устарел, а программа не запущена");
+            Log.Debug("  HaloBattery: файл устарел, а программа не запущена");
             return list;
         }
 
@@ -55,7 +55,7 @@ public sealed class HaloBatteryBridgeProvider : IBatteryProvider
             text = sr.ReadToEnd();
 
         var preview = text.Length > 800 ? text.Substring(0, 800) : text;
-        Log.Write("  HaloBattery status.json: " + preview.Replace("\r", " ").Replace("\n", " "));
+        Log.Debug("  HaloBattery status.json: " + preview.Replace("\r", " ").Replace("\n", " "));
 
         using var doc = JsonDocument.Parse(text);
         Walk(doc.RootElement, null, list);

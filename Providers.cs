@@ -44,10 +44,10 @@ public sealed class PnpBatteryProvider : IBatteryProvider
         try
         {
             var paired = await DeviceInformation.FindAllAsync(BluetoothDevice.GetDeviceSelectorFromPairingState(true));
-            Log.Write("  Bluetooth (классический) спаренных: " + paired.Count + " " +
+            Log.Debug("  Bluetooth (классический) спаренных: " + paired.Count + " " +
                       string.Join(", ", paired.Select(p => p.Name)));
         }
-        catch (Exception ex) { Log.Write("  Bluetooth (классический): " + ex.Message); }
+        catch (Exception ex) { Log.Debug("  Bluetooth (классический): " + ex.Message); }
 
         var containers = await WinKeys.ContainerNamesAsync();
         var pnps = await PnpObject.FindAllAsync(PnpObjectType.Device, new[] { WinKeys.Battery, WinKeys.ContainerId, WinKeys.ItemName });
@@ -71,10 +71,10 @@ public sealed class PnpBatteryProvider : IBatteryProvider
                 name = ns;
             if (string.IsNullOrWhiteSpace(name)) continue;
 
-            Log.Write("  PnP: " + name + " = " + level + "%");
+            Log.Debug("  PnP: " + name + " = " + level + "%");
             result.Add(new BatteryDevice(name, level, "Windows PnP"));
         }
-        Log.Write("  PnP объектов всего: " + pnps.Count + ", с зарядом: " + withBattery);
+        Log.Debug("  PnP объектов всего: " + pnps.Count + ", с зарядом: " + withBattery);
         return result;
     }
 }
@@ -90,14 +90,14 @@ public sealed class WindowsBatteryApiProvider : IBatteryProvider
         var result = new List<BatteryDevice>();
         var containers = await WinKeys.ContainerNamesAsync();
         var infos = await DeviceInformation.FindAllAsync(Battery.GetDeviceSelector(), new[] { WinKeys.ContainerId });
-        Log.Write("  Battery API, устройств с батареей: " + infos.Count);
+        Log.Debug("  Battery API, устройств с батареей: " + infos.Count);
 
         foreach (var info in infos)
         {
             try
             {
                 bool isHid = info.Id.Contains("HID", StringComparison.OrdinalIgnoreCase);
-                Log.Write("  Battery API: " + info.Name + (isHid ? " (HID)" : " (пропущено, не HID)"));
+                Log.Debug("  Battery API: " + info.Name + (isHid ? " (HID)" : " (пропущено, не HID)"));
                 if (!isHid) continue;
 
                 var bat = await Battery.FromIdAsync(info.Id);
@@ -134,7 +134,7 @@ public sealed class BleGattProvider : IBatteryProvider
     {
         var result = new List<BatteryDevice>();
         var infos = await DeviceInformation.FindAllAsync(BluetoothLEDevice.GetDeviceSelectorFromPairingState(true));
-        Log.Write("  BLE спаренных устройств: " + infos.Count);
+        Log.Debug("  BLE спаренных устройств: " + infos.Count);
 
         foreach (var info in infos)
         {
@@ -150,12 +150,12 @@ public sealed class BleGattProvider : IBatteryProvider
         try
         {
             using var dev = await BluetoothLEDevice.FromIdAsync(info.Id);
-            if (dev == null) { Log.Write("  BLE " + info.Name + ": не открылось"); return; }
-            Log.Write("  BLE " + dev.Name + ": " + dev.ConnectionStatus);
+            if (dev == null) { Log.Debug("  BLE " + info.Name + ": не открылось"); return; }
+            Log.Debug("  BLE " + dev.Name + ": " + dev.ConnectionStatus);
             if (string.IsNullOrWhiteSpace(dev.Name) || dev.ConnectionStatus != BluetoothConnectionStatus.Connected) return;
 
             var services = await dev.GetGattServicesForUuidAsync(GattServiceUuids.Battery, BluetoothCacheMode.Uncached);
-            Log.Write("  BLE " + dev.Name + ": служба батареи " + services.Status + ", найдено " + services.Services.Count);
+            Log.Debug("  BLE " + dev.Name + ": служба батареи " + services.Status + ", найдено " + services.Services.Count);
             if (services.Status != GattCommunicationStatus.Success) return;
 
             foreach (var service in services.Services)
@@ -171,7 +171,7 @@ public sealed class BleGattProvider : IBatteryProvider
                     int level = reader.ReadByte();
                     if (level >= 0 && level <= 100)
                     {
-                        Log.Write("  BLE: " + dev.Name + " = " + level + "%");
+                        Log.Debug("  BLE: " + dev.Name + " = " + level + "%");
                         lock (result) result.Add(new BatteryDevice(dev.Name, level, "Bluetooth LE"));
                     }
                 }

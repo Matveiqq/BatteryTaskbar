@@ -13,6 +13,7 @@ public class AppSettings
     public int LeftMargin { get; set; } = 12;
     public bool HideInFullscreen { get; set; } = true;
     public bool UseHaloBattery { get; set; } = true;
+    public bool VerboseLog { get; set; }
     public HashSet<string> HiddenDevices { get; set; } = new();
 
     static string FilePath => System.IO.Path.Combine(

@@ -7,7 +7,7 @@ namespace BatteryTaskbar;
 
 public static class Program
 {
-    const string Version = "1.4.2";
+    const string Version = "1.5.0";
 
     [STAThread]
     public static void Main()
@@ -45,6 +45,7 @@ public static class Program
         Log.Write("Шаг 1: приложение создано");
 
         var settings = AppSettings.Load();
+        Log.Verbose = settings.VerboseLog;
         Log.Write("Шаг 2: настройки загружены");
 
         // Источники заряда. Чтобы добавить поддержку нового бренда, напишите класс

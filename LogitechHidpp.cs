@@ -42,7 +42,7 @@ public sealed class LogitechProvider : IBatteryProvider
                             var r = ReadDevice(stream, inLen, idx);
                             if (r != null)
                             {
-                                Log.Write("  Logitech: " + r.Name + " = " + r.Level + "%");
+                                Log.Debug("  Logitech: " + r.Name + " = " + r.Level + "%");
                                 list.Add(r);
                             }
                         }
@@ -52,7 +52,7 @@ public sealed class LogitechProvider : IBatteryProvider
             }
             catch { }
         }
-        Log.Write("  Logitech HID интерфейсов: " + total + ", с длинными отчётами HID++: " + longIf);
+        Log.Debug("  Logitech HID интерфейсов: " + total + ", с длинными отчётами HID++: " + longIf);
         return list;
     }
 

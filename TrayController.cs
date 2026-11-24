@@ -60,7 +60,8 @@ public sealed class TrayController : IDisposable
         else if (monitor.Devices.Count == 0)
             menu.Items.Add(new Forms.ToolStripMenuItem(monitor.HasPolled ? "Устройства не найдены" : "Идёт поиск устройств…") { Enabled = false });
         foreach (var d in monitor.Devices)
-            menu.Items.Add(new Forms.ToolStripMenuItem(d.Name + " — " + d.Level + "%"));
+            menu.Items.Add(new Forms.ToolStripMenuItem(
+                d.Name + " — " + d.Level + "%" + (d.Stale ? " (нет свежих данных)" : "") + "  [" + d.Source + "]"));
         menu.Items.Add(new Forms.ToolStripSeparator());
 
         // Что показывать на панели
@@ -110,6 +111,10 @@ public sealed class TrayController : IDisposable
         var halo = new Forms.ToolStripMenuItem("Брать данные из HaloBattery (если запущен)") { Checked = settings.UseHaloBattery };
         halo.Click += (_, _) => { settings.UseHaloBattery = !settings.UseHaloBattery; settings.Save(); };
         menu.Items.Add(halo);
+
+        var verbose = new Forms.ToolStripMenuItem("Подробный журнал (для диагностики)") { Checked = settings.VerboseLog };
+        verbose.Click += (_, _) => { settings.VerboseLog = !settings.VerboseLog; Log.Verbose = settings.VerboseLog; settings.Save(); };
+        menu.Items.Add(verbose);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
 

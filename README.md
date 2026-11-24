@@ -54,3 +54,7 @@
 
 ## Лицензия
 MIT
+
+## Благодарности
+- Протокол мыши AJAZZ AJ159 APEX / AM Infinity 8K: описание из открытых проектов HaloBattery (HeyOkay) и AJAZZ Control Center.
+- Протокол Logitech HID++: открытые описания проектов Solaar и libratbag.
