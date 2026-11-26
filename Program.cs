@@ -7,7 +7,7 @@ namespace BatteryTaskbar;
 
 public static class Program
 {
-    const string Version = "1.5.0";
+    public const string Version = "1.6.0";
 
     [STAThread]
     public static void Main()
@@ -21,14 +21,8 @@ public static class Program
             e.SetObserved();
         };
 
-        try
-        {
-            Run();
-        }
-        catch (Exception ex)
-        {
-            ReportCrash("Ошибка при запуске", ex);
-        }
+        try { Run(); }
+        catch (Exception ex) { ReportCrash("Ошибка при запуске", ex); }
     }
 
     static void Run()
@@ -36,7 +30,6 @@ public static class Program
         Log.Write("=== запуск Battery Taskbar " + Version + ", " + Environment.OSVersion.VersionString + " ===");
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        // Ошибка в интерфейсе не должна убивать программу: пишем в журнал и продолжаем
         app.DispatcherUnhandledException += (_, e) =>
         {
             Log.Write("Ошибка интерфейса: " + e.Exception);
@@ -48,22 +41,22 @@ public static class Program
         Log.Verbose = settings.VerboseLog;
         Log.Write("Шаг 2: настройки загружены");
 
-        // Источники заряда. Чтобы добавить поддержку нового бренда, напишите класс
-        // IBatteryProvider и добавьте его сюда. Порядок задаёт приоритет при дублях.
+        // Источники заряда. Чтобы добавить поддержку нового бренда, напишите класс IBatteryProvider
+        // и добавьте его сюда. Порядок задаёт приоритет при дублях.
         var monitor = new DeviceMonitor(
             new BleGattProvider(),
             new PnpBatteryProvider(),
             new WindowsBatteryApiProvider(),
+            new LogitechG435Provider(settings),
             new LogitechProvider(),
             new FeatureReportProvider(),
-            new HaloBatteryBridgeProvider(settings));
+            new CompxProvider());
         Log.Write("Шаг 3: источники созданы");
 
         var overlay = new OverlayWindow(settings, monitor);
         Log.Write("Шаг 4: виджет создан");
 
         var tray = new TrayController(settings, monitor);
-        overlay.OpenMenu = tray.ShowMenu;
         Log.Write("Шаг 5: значок в трее создан");
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
@@ -74,6 +67,7 @@ public static class Program
         {
             Log.Write("Шаг 6: запуск окна и первого опроса");
             overlay.Show();
+            overlay.Refresh();
             _ = monitor.PollAsync();
         };
         app.Run();

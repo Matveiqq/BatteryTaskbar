@@ -11,9 +11,12 @@ public class AppSettings
     public int Theme { get; set; } = 1;
     public int LowThreshold { get; set; } = 20;
     public int LeftMargin { get; set; } = 12;
+    // Положение виджета по горизонтали (null = по умолчанию, у левого края)
+    public double? WidgetX { get; set; }
     public bool HideInFullscreen { get; set; } = true;
-    public bool UseHaloBattery { get; set; } = true;
     public bool VerboseLog { get; set; }
+    // Чтение G435 на донгле 046D:0ACB на ~1 секунду приглушает звук, поэтому выключено, пока пользователь не включит
+    public bool AllowG435AcbPolling { get; set; }
     public HashSet<string> HiddenDevices { get; set; } = new();
 
     static string FilePath => System.IO.Path.Combine(
@@ -36,7 +39,8 @@ public class AppSettings
         try
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilePath)!);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(this,
+                new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { }
     }
@@ -51,8 +55,8 @@ public static class Autostart
     {
         try
         {
-            using var k = Registry.CurrentUser.OpenSubKey(RunKey);
-            return k?.GetValue(ValueName) != null;
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+            return key?.GetValue(ValueName) != null;
         }
         catch { return false; }
     }
@@ -61,12 +65,12 @@ public static class Autostart
     {
         try
         {
-            using var k = Registry.CurrentUser.OpenSubKey(RunKey, true);
-            if (k == null) return;
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
+            if (key == null) return;
             if (enabled && Environment.ProcessPath != null)
-                k.SetValue(ValueName, "\"" + Environment.ProcessPath + "\"");
+                key.SetValue(ValueName, "\"" + Environment.ProcessPath + "\"");
             else
-                k.DeleteValue(ValueName, false);
+                key.DeleteValue(ValueName, false);
         }
         catch { }
     }
@@ -74,13 +78,28 @@ public static class Autostart
 
 public static class SystemInfo
 {
+    // Тема панели задач и системы (для виджета и значка в трее)
     public static bool IsLightTheme()
     {
         try
         {
-            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            return (k?.GetValue("SystemUsesLightTheme") as int?) == 1;
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return (key?.GetValue("SystemUsesLightTheme") as int?) == 1;
         }
         catch { return false; }
+    }
+
+    // Тема приложений (для окна настроек)
+    public static bool IsAppLightTheme()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            object? value = key?.GetValue("AppsUseLightTheme");
+            return value is int number ? number != 0 : true;
+        }
+        catch { return true; }
     }
 }
